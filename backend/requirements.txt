@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sse-starlette
+anthropic
+llama-index-core
+llama-index-readers-file
+llama-index-embeddings-huggingface
+elevenlabs
+pytest
+pytest-asyncio
+httpx
