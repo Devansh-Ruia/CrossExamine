@@ -6,12 +6,12 @@ This module owns both the agents AND the loop -- keeping the core logic in one p
 
 import json
 import os
-import anthropic
+from groq import AsyncGroq
 from ingest import retrieve_chunks, chunks_above_threshold, format_chunk_for_context
 from session import Session
 
-_client = anthropic.AsyncAnthropic()
-MODEL = "claude-sonnet-4-6"
+_client = AsyncGroq()  # reads GROQ_API_KEY from env automatically
+MODEL = "llama-3.3-70b-versatile"
 MAX_TOKENS = 1024
 
 # -- System Prompts --
@@ -142,14 +142,32 @@ async def stream_agent_turn(
         retrieval_has_results=retrieval_has_results,
     )
 
+    # HACK: Groq free tier has limited context window. If the assembled message
+    # is too large, trim retrieved chunks from 5 to 3 to stay under the limit.
+    # Uses len(content)/4 as a rough char-to-token estimate — not a real tokenizer.
+    rough_tokens = len(system_prompt + user_message) / 4
+    if rough_tokens > 6000 and chunks:
+        user_message = build_user_message(
+            witness_statement=witness_statement,
+            chunks=chunks[:3],
+            history=history,
+            interjections=interjections,
+            retrieval_has_results=retrieval_has_results,
+        )
+
     full_text = ""
-    async with _client.messages.stream(
+    stream = await _client.chat.completions.create(
         model=MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
         max_tokens=MAX_TOKENS,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    ) as stream:
-        async for text in stream.text_stream:
+        stream=True,
+    )
+    async for chunk in stream:
+        text = chunk.choices[0].delta.content
+        if text:  # delta.content is None on the final chunk, skip it
             full_text += text
             yield {
                 "type": "token",
@@ -190,14 +208,16 @@ async def generate_report(session: Session, chunk_store: dict) -> list[dict]:
         + f"\n\nFULL DEBATE TRANSCRIPT:\n{history_text}"
     )
 
-    response = await _client.messages.create(
+    response = await _client.chat.completions.create(
         model=MODEL,
         max_tokens=4096,
-        system=SUMMARIZER_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
+        messages=[
+            {"role": "system", "content": SUMMARIZER_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
     )
 
-    raw_text = response.content[0].text.strip()
+    raw_text = response.choices[0].message.content.strip()
     try:
         vulnerabilities = json.loads(raw_text)
     except json.JSONDecodeError:

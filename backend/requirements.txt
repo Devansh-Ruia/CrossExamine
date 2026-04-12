@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 sse-starlette
-anthropic
+groq
 llama-index-core
 llama-index-readers-file
 llama-index-embeddings-huggingface
