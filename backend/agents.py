@@ -4,6 +4,7 @@ Two agent functions (attack, defense) and the debate loop that orchestrates them
 This module owns both the agents AND the loop -- keeping the core logic in one place.
 """
 
+import asyncio
 import json
 import os
 from groq import AsyncGroq
@@ -295,6 +296,10 @@ async def run_debate(session: Session, chunk_store: dict):
                     "round": round_num,
                 }
 
+        # small pause so groq doesn't 429 on back-to-back requests
+        # free tier rate limit is tight — 2s is enough, don't make it longer
+        await asyncio.sleep(2)
+
         # 3. Drain interjections before defense turn
         interjections = session.drain_interjections()
         if interjections:
@@ -348,6 +353,10 @@ async def run_debate(session: Session, chunk_store: dict):
                     "round": round_num,
                 }
 
+        # small pause so groq doesn't 429 on back-to-back requests
+        # free tier rate limit is tight — 2s is enough, don't make it longer
+        await asyncio.sleep(2)
+
         # 5. Early termination check
         current_cited_count = len(session.cited_chunks)
         if current_cited_count == previous_cited_count:
@@ -363,5 +372,14 @@ async def run_debate(session: Session, chunk_store: dict):
         yield {"type": "session_complete", "reason": "all_rounds"}
 
     # Generate vulnerability report
-    report = await generate_report(session, chunk_store)
-    session.report = report
+    session.status = "generating_report"
+    print("starting report generation for session", session.id)
+    try:
+        report = await generate_report(session, chunk_store)
+        session.report = report
+        session.status = "complete"
+        print("report generation complete for session", session.id)
+    except Exception as e:
+        print("report generation failed for session", session.id, e)
+        session.status = "complete"
+        raise

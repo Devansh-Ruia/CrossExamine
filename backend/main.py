@@ -121,8 +121,12 @@ async def get_report(session_id: str):
     session = store.get(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    if session.status == "running":
+        raise HTTPException(409, "debate still in progress")
+    if session.status == "generating_report":
+        raise HTTPException(409, "report is being generated, try again in a moment")
     if session.report is None:
-        raise HTTPException(409, "Report not generated yet -- debate may still be running")
+        raise HTTPException(500, "report generation failed")
 
     high = sum(1 for v in session.report if v.get("severity") == "high")
     medium = sum(1 for v in session.report if v.get("severity") == "medium")

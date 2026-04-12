@@ -27,6 +27,7 @@ class Session:
     history: list[dict] = field(default_factory=list)
     interjection_queue: list[str] = field(default_factory=list)
     cited_chunks: set[str] = field(default_factory=set)
+    status: str = "running"
     report: list[dict] | None = None
     attack_dry_rounds: int = 0
 
