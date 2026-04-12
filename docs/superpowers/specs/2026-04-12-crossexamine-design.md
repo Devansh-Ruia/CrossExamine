@@ -25,7 +25,10 @@ Five backend modules, three frontend pages, three external services.
 
 **`main.py`** — FastAPI app. Thin routing layer that wires everything together.
 Routes: file upload, session creation, SSE streaming, interjection POST, report
-retrieval, and static audio file serving.
+retrieval, and static audio file serving. Includes `CORSMiddleware` configured
+for localhost origins in dev (Next.js dev server runs on a different port than
+FastAPI — without CORS config, every frontend fetch silently fails and you'll
+waste 20 minutes debugging it).
 
 **`ingest.py`** — Document ingestion pipeline. Takes uploaded files (PDF, TXT, DOCX
 via LlamaIndex's SimpleDirectoryReader), chunks them with SentenceSplitter (512
@@ -49,7 +52,11 @@ cited_chunks set, and the final vulnerability report.
 
 ```
 1. User uploads docs + witness statement        -> POST /upload
-2. Backend chunks files, builds vector index     -> ingest.py
+   POST /upload does everything: saves files, chunks them, builds the vector
+   index, creates the session object, returns the session_id. This is synchronous
+   — the frontend shows "INDEXING..." until it gets the response. For a few PDFs
+   this takes seconds, not minutes. The SSE connection does NOT trigger indexing.
+2. (indexing happens inside step 1)
 3. User starts session                           -> GET /session/{id}/stream (SSE)
 4. Per round:
    a. agents.py drains session.interjection_queue
@@ -139,12 +146,20 @@ to cite, it says so. The whole point is trustworthy adversarial analysis.
 
 ### Cited Chunks Tracking
 
-`session.py` maintains a `cited_chunks` set. Mechanically: after each agent turn,
-if the agent made any citation (referenced a document/page), add the above-threshold
-retrieved chunks from that turn's context to cited_chunks. If the agent said "I don't
-have documentary support," don't add them. This is a simple heuristic — we're not
-doing substring matching, just using "did the agent cite anything this turn" as a
-binary gate on whether the retrieval was useful.
+`session.py` maintains a `cited_chunks` set and a list of source filenames from
+the uploaded documents. After each agent turn, the citation detection works like
+this:
+
+1. Scan the agent's response text for any source filename from the session's
+   document list (substring match, case-insensitive). Also check for page
+   reference patterns like "p. 3", "page 3", "(p3)".
+2. If any filename match is found, add the above-threshold retrieved chunks from
+   that turn's context to cited_chunks.
+3. If no filename match is found (agent didn't cite anything, or said "I don't
+   have documentary support"), don't add the chunks.
+
+This is a concrete, mechanical check — not a judgment call. The source filename
+list is built during ingestion and stored on the session object.
 
 At report generation time, only cited_chunks are passed to the summarizer. Smaller
 context, more focused, and it means the summarizer works with evidence that was
@@ -429,7 +444,9 @@ The witness claims she arrived at 9pm...
 animation opacity 1 -> 0.3 -> 1, 1.2s ease-in-out. Stops on turn complete.
 
 **Streaming cursor:** 1px wide blinking cursor at the end of the active turn's
-text. Disappears when the turn is complete.
+text. The cursor appears when the frontend receives the first `token` event for
+a new agent+round combination (this is how the frontend knows a new turn started
+— no separate `turn_start` event needed). The cursor disappears on `turn_complete`.
 
 **Judge's instruction:** Same block format but amber left border, label
 "JUDGE'S INSTRUCTION" in amber.
@@ -516,8 +533,10 @@ No other configuration. No database URLs. No auth tokens.
 1. Backend: document ingestion (`ingest.py` + `session.py`)
 2. Backend: agent loop (`agents.py`)
 3. Backend: API routes and SSE (`main.py`)
-4. Frontend: upload page, session arena, report page
-5. Voice integration (`voice.py`) — nice-to-have, core logic is not
+4. Frontend: upload page + report page (these are simpler, mostly static rendering)
+5. Frontend: session arena (SSE rendering, audio queuing, interjection flow,
+   live status bar — build this AFTER backend SSE is verified working)
+6. Voice integration (`voice.py`) — nice-to-have, core logic is not
 
 ## What Not To Do
 
