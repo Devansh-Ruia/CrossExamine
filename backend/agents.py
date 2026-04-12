@@ -12,7 +12,7 @@ from ingest import retrieve_chunks, chunks_above_threshold, format_chunk_for_con
 from session import Session
 
 _client = AsyncGroq()  # reads GROQ_API_KEY from env automatically
-MODEL = "llama3-8b-8192"
+MODEL = "gemma2-9b-it"
 MAX_TOKENS = 1024
 
 # -- System Prompts --
