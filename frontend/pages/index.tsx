@@ -209,7 +209,7 @@ export default function LandingPage() {
       const obj = { val: 0 };
       gsap.to(obj, {
         val: target,
-        duration: 2,
+        duration: 1.5,
         ease: 'power2.out',
         scrollTrigger: { trigger: ref.current, start: 'top 85%' },
         onUpdate() {
@@ -226,8 +226,22 @@ export default function LandingPage() {
       });
     }
 
+    /* Refresh ScrollTrigger after full page layout settles */
+    const onLoad = () => ScrollTrigger.refresh();
+    window.addEventListener('load', onLoad);
+
+    /* Fallback: snap invisible animated elements to visible after 3s */
+    const fallbackTimer = setTimeout(() => {
+      document.querySelectorAll('.gsap-reveal').forEach((el) => {
+        gsap.killTweensOf(el);
+        gsap.set(el, { opacity: 1, x: 0, y: 0 });
+      });
+    }, 3000);
+
     return () => {
       ScrollTrigger.getAll().forEach((t) => t.kill());
+      window.removeEventListener('load', onLoad);
+      clearTimeout(fallbackTimer);
     };
   }, []);
 
@@ -292,8 +306,8 @@ export default function LandingPage() {
       <main className="font-mono relative">
         {/* ═══ Section 1: Hero ═══ */}
         <section
-          className="min-h-screen flex flex-col"
-          style={{ paddingLeft: '20%', paddingRight: '8%' }}
+          className="min-h-screen flex flex-col text-left"
+          style={{ paddingLeft: '10vw' }}
         >
           <div className="flex-1 flex flex-col justify-center">
             <h1
@@ -333,13 +347,13 @@ export default function LandingPage() {
 
         {/* ═══ Section 2: How It Works ═══ */}
         <section ref={howSectionRef} className="px-12 lg:px-24 py-24">
-          <div className="section-label text-label uppercase tracking-widest text-text-muted mb-12">
+          <div className="section-label gsap-reveal text-label uppercase tracking-widest text-text-muted mb-12">
             HOW IT WORKS
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-12">
             {/* Attack column */}
-            <div ref={attackColRef} className="pl-4 border-l-2 border-l-attack">
+            <div ref={attackColRef} className="gsap-reveal pl-4 border-l-2 border-l-attack">
               <div className="flex justify-between items-center mb-3">
                 <div className="text-label uppercase tracking-widest text-attack flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 bg-text-ghost" />
@@ -364,7 +378,7 @@ export default function LandingPage() {
             </div>
 
             {/* Defense column */}
-            <div ref={defenseColRef} className="pl-4 border-l-2 border-l-defense">
+            <div ref={defenseColRef} className="gsap-reveal pl-4 border-l-2 border-l-defense">
               <div className="flex justify-between items-center mb-3">
                 <div className="text-label uppercase tracking-widest text-defense flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 bg-text-ghost" />
@@ -390,7 +404,7 @@ export default function LandingPage() {
 
           <p
             ref={howExplainerRef}
-            className="text-body text-[#666] max-w-[700px]"
+            className="gsap-reveal text-body text-[#666] max-w-[700px]"
           >
             Each agent retrieves only what the documents actually say.
             No invented citations. No confident nonsense.
@@ -404,7 +418,7 @@ export default function LandingPage() {
           </div>
 
           {/* Card 1: HIGH */}
-          <div className="vuln-card mb-10 pl-4 border-l-2 border-l-attack">
+          <div className="vuln-card gsap-reveal mb-10 pl-4 border-l-2 border-l-attack">
             <div className="flex justify-between items-center mb-4">
               <span className="text-label uppercase tracking-widest font-semibold text-attack">
                 HIGH
@@ -429,7 +443,7 @@ export default function LandingPage() {
           </div>
 
           {/* Card 2: MEDIUM */}
-          <div className="vuln-card mb-10 pl-4 border-l-2 border-l-amber">
+          <div className="vuln-card gsap-reveal mb-10 pl-4 border-l-2 border-l-amber">
             <div className="flex justify-between items-center mb-4">
               <span className="text-label uppercase tracking-widest font-semibold text-amber">
                 MEDIUM
@@ -454,7 +468,7 @@ export default function LandingPage() {
           </div>
 
           {/* Card 3: MEDIUM, CONCEDED */}
-          <div className="vuln-card mb-10 pl-4 border-l-2 border-l-amber">
+          <div className="vuln-card gsap-reveal mb-10 pl-4 border-l-2 border-l-amber">
             <div className="flex justify-between items-center mb-4">
               <span className="text-label uppercase tracking-widest font-semibold text-amber">
                 MEDIUM
@@ -483,7 +497,7 @@ export default function LandingPage() {
         </section>
 
         {/* ═══ Section 4: Stats ═══ */}
-        <section ref={statsSectionRef} className="legal-texture px-12 lg:px-24 py-24">
+        <section ref={statsSectionRef} className="gsap-reveal legal-texture px-12 lg:px-24 py-24">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-12">
             <div>
               <span
@@ -492,7 +506,7 @@ export default function LandingPage() {
               >
                 0
               </span>
-              <div className="text-label uppercase tracking-widest text-text-muted leading-relaxed">
+              <div className="text-label uppercase tracking-widest text-[#888888] leading-relaxed">
                 AI hallucination<br />
                 cases in courts<br />
                 globally
@@ -505,7 +519,7 @@ export default function LandingPage() {
               >
                 0%
               </span>
-              <div className="text-label uppercase tracking-widest text-text-muted leading-relaxed">
+              <div className="text-label uppercase tracking-widest text-[#888888] leading-relaxed">
                 of lawyers now<br />
                 use AI tools
               </div>
@@ -517,7 +531,7 @@ export default function LandingPage() {
               >
                 0
               </span>
-              <div className="text-label uppercase tracking-widest text-text-muted leading-relaxed">
+              <div className="text-label uppercase tracking-widest text-[#888888] leading-relaxed">
                 contradictions<br />
                 surfaced in<br />
                 Webb v. State
@@ -539,7 +553,7 @@ export default function LandingPage() {
         {/* ═══ Section 5: CTA ═══ */}
         <section
           ref={ctaSectionRef}
-          className="px-12 lg:px-24 py-32 flex flex-col justify-center"
+          className="gsap-reveal px-12 lg:px-24 py-32 flex flex-col justify-center"
         >
           <div className="text-[36px] font-semibold tracking-wider text-text-primary mb-4">
             UPLOAD YOUR CASE
