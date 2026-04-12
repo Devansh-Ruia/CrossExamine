@@ -367,12 +367,13 @@ async def run_debate(session: Session, chunk_store: dict):
         previous_cited_count = current_cited_count
 
         if session.attack_dry_rounds >= 2:
-            yield {"type": "session_complete", "reason": "exhausted"}
+            reason = "exhausted"
             break
     else:
-        yield {"type": "session_complete", "reason": "all_rounds"}
+        reason = "all_rounds"
 
-    # Generate vulnerability report
+    # Generate vulnerability report BEFORE signaling completion
+    yield {"type": "status", "message": "generating vulnerability report..."}
     session.status = "generating_report"
     print("starting report generation for session", session.id)
     try:
@@ -386,3 +387,5 @@ async def run_debate(session: Session, chunk_store: dict):
     except Exception as e:
         print("report generation failed:", str(e), "session:", session.id)
         session.status = "failed"
+
+    yield {"type": "session_complete", "reason": reason}

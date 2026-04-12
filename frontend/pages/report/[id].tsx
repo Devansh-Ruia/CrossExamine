@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { fetchReport, Vulnerability, ReportMetadata } from '@/lib/api';
+import { API_URL, Vulnerability, ReportMetadata } from '@/lib/api';
 
 const SEVERITY_BORDER: Record<string, string> = {
   high: 'border-l-attack',
@@ -14,21 +14,42 @@ export default function ReportPage() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [meta, setMeta] = useState<ReportMetadata | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!id || typeof id !== 'string') return;
     let cancelled = false;
+    let attempts = 0;
 
     const poll = async () => {
+      attempts++;
       try {
-        const data = await fetchReport(id);
-        if (!cancelled) {
-          setVulns(data.vulnerabilities);
-          setMeta(data.metadata);
-          setLoading(false);
+        const res = await fetch(`${API_URL}/session/${id}/report`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) {
+            setVulns(data.vulnerabilities);
+            setMeta(data.metadata);
+            setLoading(false);
+          }
+          return;
         }
+        if (res.status >= 500) {
+          if (!cancelled) {
+            setError('report generation failed');
+            setLoading(false);
+          }
+          return;
+        }
+        // 409 or other: keep polling
       } catch {
-        if (!cancelled) setTimeout(poll, 2000);
+        // network error: keep polling
+      }
+      if (!cancelled && attempts < 30) {
+        setTimeout(poll, 3000);
+      } else if (!cancelled) {
+        setError('report generation timed out — refresh to try again');
+        setLoading(false);
       }
     };
     poll();
@@ -106,6 +127,14 @@ export default function ReportPage() {
     return (
       <div className="p-12">
         <span className="text-body text-text-muted">LOADING</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-12">
+        <span className="text-body text-text-muted">{error}</span>
       </div>
     );
   }

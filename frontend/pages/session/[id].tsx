@@ -14,6 +14,7 @@ export default function SessionPage() {
   const [interjectText, setInterjectText] = useState('');
   const [sessionDone, setSessionDone] = useState(false);
   const [doneReason, setDoneReason] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const [currentRound, setCurrentRound] = useState(0);
 
   const audioQueue = useRef<string[]>([]);
@@ -99,7 +100,13 @@ export default function SessionPage() {
           break;
         }
 
+        case 'status': {
+          if (event.message) setStatusMessage(event.message);
+          break;
+        }
+
         case 'session_complete': {
+          setStatusMessage('');
           setSessionDone(true);
           setDoneReason(
             event.reason === 'exhausted'
@@ -109,6 +116,9 @@ export default function SessionPage() {
           source.close();
           break;
         }
+
+        default:
+          break;
       }
     };
 
@@ -159,6 +169,12 @@ export default function SessionPage() {
     <div className="flex flex-col min-h-screen">
       <div className="px-12 py-4 border-b border-border text-label uppercase tracking-wider text-text-muted flex items-center gap-1.5">
         <span>ROUND <span className="text-text-dim">{currentRound} / ?</span></span>
+        {statusMessage && (
+          <>
+            <span className="text-text-ghost">&bull;</span>
+            <span className="text-text-dim">{statusMessage}</span>
+          </>
+        )}
         {sessionDone && (
           <>
             <span className="text-text-ghost">&bull;</span>
