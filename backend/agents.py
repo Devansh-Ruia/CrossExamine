@@ -209,13 +209,16 @@ async def generate_report(session: Session, chunk_store: dict) -> list[dict]:
         + f"\n\nFULL DEBATE TRANSCRIPT:\n{history_text}"
     )
 
-    response = await _client.chat.completions.create(
-        model=MODEL,
-        max_tokens=4096,
-        messages=[
-            {"role": "system", "content": SUMMARIZER_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
+    response = await asyncio.wait_for(
+        _client.chat.completions.create(
+            model=MODEL,
+            max_tokens=4096,
+            messages=[
+                {"role": "system", "content": SUMMARIZER_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+        ),
+        timeout=60.0,
     )
 
     raw_text = response.choices[0].message.content.strip()
@@ -297,8 +300,7 @@ async def run_debate(session: Session, chunk_store: dict):
                 }
 
         # small pause so groq doesn't 429 on back-to-back requests
-        # free tier rate limit is tight — 2s is enough, don't make it longer
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
 
         # 3. Drain interjections before defense turn
         interjections = session.drain_interjections()
@@ -354,8 +356,7 @@ async def run_debate(session: Session, chunk_store: dict):
                 }
 
         # small pause so groq doesn't 429 on back-to-back requests
-        # free tier rate limit is tight — 2s is enough, don't make it longer
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
 
         # 5. Early termination check
         current_cited_count = len(session.cited_chunks)
@@ -379,7 +380,9 @@ async def run_debate(session: Session, chunk_store: dict):
         session.report = report
         session.status = "complete"
         print("report generation complete for session", session.id)
+    except asyncio.TimeoutError:
+        print("report generation timed out for session", session.id)
+        session.status = "failed"
     except Exception as e:
-        print("report generation failed for session", session.id, e)
-        session.status = "complete"
-        raise
+        print("report generation failed:", str(e), "session:", session.id)
+        session.status = "failed"

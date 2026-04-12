@@ -125,6 +125,11 @@ async def get_report(session_id: str):
         raise HTTPException(409, "debate still in progress")
     if session.status == "generating_report":
         raise HTTPException(409, "report is being generated, try again in a moment")
+    if session.status == "failed":
+        raise HTTPException(
+            status_code=500,
+            detail="report generation failed — check backend logs",
+        )
     if session.report is None:
         raise HTTPException(500, "report generation failed")
 
