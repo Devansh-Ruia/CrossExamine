@@ -11,6 +11,7 @@ venv/
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
+frontend/next-env.d.ts
 
 # Environment
 .env

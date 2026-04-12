@@ -1,7 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./pages/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
+  content: ['./pages/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
+    // Outside extend intentionally -- this app is monospace-only
     fontFamily: {
       mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
     },
