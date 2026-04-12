@@ -68,7 +68,8 @@ export interface SSEEvent {
     | 'audio_failed'
     | 'interjection_ack'
     | 'session_complete'
-    | 'status';
+    | 'status'
+    | 'session_config';
   agent?: 'attack' | 'defense';
   round?: number;
   text?: string;
@@ -76,4 +77,6 @@ export interface SSEEvent {
   audio_status?: 'pending';
   reason?: 'all_rounds' | 'exhausted';
   message?: string;
+  num_rounds?: number;
+  session_id?: string;
 }

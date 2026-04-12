@@ -92,6 +92,11 @@ async def stream_session(session_id: str):
     chunk_store = _chunk_stores.get(session_id, {})
 
     async def event_generator():
+        yield {"data": json.dumps({
+            "type": "session_config",
+            "num_rounds": session.config.num_rounds,
+            "session_id": session.id,
+        })}
         async for event in run_debate(session, chunk_store):
             yield {"data": json.dumps(event)}
 

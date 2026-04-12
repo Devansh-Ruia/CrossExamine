@@ -175,16 +175,35 @@ export default function ReportPage() {
         </div>
       )}
 
-      <hr className="border-border mt-8 mb-8" />
+      <hr className="border-border mt-8 mb-6" />
+
+      <div className="text-body text-[#666666] mb-6">
+        Contradictions surfaced by the attacking agent against the witness account,
+        ranked by severity. Conceded items were not successfully defended.
+      </div>
 
       <div className="text-label uppercase tracking-wider text-text-muted mb-12 flex items-center gap-1.5">
-        <span>HIGH: <span className="text-attack font-semibold">{counts.high}</span></span>
-        <span className="text-text-ghost">&bull;</span>
-        <span>MEDIUM: <span className="text-amber font-semibold">{counts.medium}</span></span>
-        <span className="text-text-ghost">&bull;</span>
-        <span>LOW: <span className="text-low font-semibold">{counts.low}</span></span>
-        <span className="text-text-ghost">&bull;</span>
-        <span>CONCEDED: <span className="text-amber font-semibold">{counts.conceded}</span></span>
+        {[
+          counts.high > 0 && (
+            <span key="high">HIGH: <span className="text-attack font-semibold">{counts.high}</span></span>
+          ),
+          counts.medium > 0 && (
+            <span key="medium">MEDIUM: <span className="text-amber font-semibold">{counts.medium}</span></span>
+          ),
+          counts.low > 0 && (
+            <span key="low">LOW: <span className="text-low font-semibold">{counts.low}</span></span>
+          ),
+          counts.conceded > 0 && (
+            <span key="conceded">CONCEDED: <span className="text-amber font-semibold">{counts.conceded}</span></span>
+          ),
+        ]
+          .filter(Boolean)
+          .map((el, i, arr) => (
+            <span key={i} className="flex items-center gap-1.5">
+              {el}
+              {i < arr.length - 1 && <span className="text-text-ghost">&bull;</span>}
+            </span>
+          ))}
       </div>
 
       {vulns.map((v, i) => (

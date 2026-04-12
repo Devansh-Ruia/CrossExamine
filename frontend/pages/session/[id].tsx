@@ -16,6 +16,9 @@ export default function SessionPage() {
   const [doneReason, setDoneReason] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [currentRound, setCurrentRound] = useState(0);
+  const [numRounds, setNumRounds] = useState<number | null>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [reportReady, setReportReady] = useState(false);
 
   const audioQueue = useRef<string[]>([]);
   const isPlaying = useRef(false);
@@ -34,7 +37,13 @@ export default function SessionPage() {
       const event: SSEEvent = JSON.parse(e.data);
 
       switch (event.type) {
+        case 'session_config': {
+          if (event.num_rounds) setNumRounds(event.num_rounds);
+          break;
+        }
+
         case 'token': {
+          setConnecting(false);
           setTimeline((prev) => {
             const last = prev[prev.length - 1];
             if (
@@ -106,7 +115,6 @@ export default function SessionPage() {
         }
 
         case 'session_complete': {
-          setStatusMessage('');
           setSessionDone(true);
           setDoneReason(
             event.reason === 'exhausted'
@@ -114,6 +122,23 @@ export default function SessionPage() {
               : 'All rounds completed.',
           );
           source.close();
+
+          // Poll for report readiness
+          const pollReport = async () => {
+            let attempts = 0;
+            while (attempts < 30) {
+              attempts++;
+              try {
+                const res = await fetch(`${API_URL}/session/${id}/report`);
+                if (res.ok) {
+                  setReportReady(true);
+                  return;
+                }
+              } catch { /* keep polling */ }
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+          };
+          pollReport();
           break;
         }
 
@@ -168,22 +193,42 @@ export default function SessionPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <div className="px-12 py-4 border-b border-border text-label uppercase tracking-wider text-text-muted flex items-center gap-1.5">
-        <span>ROUND <span className="text-text-dim">{currentRound} / ?</span></span>
-        {statusMessage && (
+        {sessionDone ? (
           <>
+            <span className="text-text-dim">DEBATE CONCLUDED</span>
             <span className="text-text-ghost">&bull;</span>
-            <span className="text-text-dim">{statusMessage}</span>
+            {reportReady ? (
+              <span
+                className="text-text-dim cursor-pointer hover:text-text-primary transition-colors duration-100 ml-auto"
+                onClick={() => router.push(`/report/${id}`)}
+              >
+                VIEW VULNERABILITY REPORT &rarr;
+              </span>
+            ) : (
+              <span className="text-text-dim">GENERATING REPORT...</span>
+            )}
           </>
-        )}
-        {sessionDone && (
+        ) : (
           <>
-            <span className="text-text-ghost">&bull;</span>
-            <span className="text-text-dim">COMPLETE</span>
+            <span>ROUND <span className="text-text-dim">{currentRound} / {numRounds ?? '...'}</span></span>
+            {statusMessage && (
+              <>
+                <span className="text-text-ghost">&bull;</span>
+                <span className="text-text-dim">{statusMessage}</span>
+              </>
+            )}
           </>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-12 py-8 max-w-[960px] w-full">
+        {connecting && timeline.length === 0 && (
+          <div className="mb-8 text-label text-text-muted flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-text-muted animate-pulse-dot" />
+            CONNECTING TO CASE RECORD...
+          </div>
+        )}
+
         {timeline.map((item, i) => {
           if (item.kind === 'interjection') {
             return (
@@ -240,12 +285,6 @@ export default function SessionPage() {
         {sessionDone && (
           <div className="mb-8 pt-4 border-t border-border">
             <div className="text-body text-text-muted">{doneReason}</div>
-            <button
-              onClick={() => router.push(`/report/${id}`)}
-              className="mt-4 text-label uppercase tracking-widest text-text-muted border border-border px-4 py-2 hover:text-text-primary hover:border-text-dim transition-colors duration-100"
-            >
-              VIEW REPORT
-            </button>
           </div>
         )}
 
@@ -253,7 +292,11 @@ export default function SessionPage() {
       </div>
 
       {!sessionDone && (
-        <div className="border-t border-border px-12 py-4 flex gap-4 items-center">
+        <div className="border-t border-border px-12 pt-3 pb-4">
+          <div className="text-label text-text-muted mb-2">
+            JUDGE&apos;S BENCH &nbsp;&mdash;&nbsp; interject between rounds to direct counsel
+          </div>
+          <div className="flex gap-4 items-center">
           <input
             type="text"
             value={interjectText}
@@ -268,6 +311,7 @@ export default function SessionPage() {
           >
             SUBMIT
           </button>
+          </div>
         </div>
       )}
     </div>
