@@ -35,8 +35,7 @@ app.add_middleware(
 store = SessionStore()
 _chunk_stores: dict[str, dict] = {}
 
-# Temp dir for audio files -- voice.py will be wired in Task 9
-AUDIO_DIR = tempfile.mkdtemp(prefix="crossexamine_audio_")
+from voice import AUDIO_DIR
 
 
 @app.post("/upload")
