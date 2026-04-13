@@ -294,20 +294,37 @@ async def stream_agent_turn(
     }
 
 
-async def generate_report(session: Session, chunk_store: dict) -> list[dict]:
+async def generate_report(
+    session: Session, chunk_store: dict,
+    max_history_turns: int = 6, max_chunks: int = 8,
+) -> list[dict]:
     """Final summarizer call after the debate ends."""
-    cited_chunk_texts = []
+    # summarizer gets trimmed context — small model, tight TPM limit
+    # 6 turns of history + 8 top chunks keeps us under 6000 tokens
+    # if this still fails, drop to 4 turns and 6 chunks
+
+    # Collect cited chunks, sorted by text length (shorter = denser);
+    # chunk_store doesn't carry retrieval scores so length is our proxy.
+    cited_entries = []
     for chunk_id in session.cited_chunks:
         if chunk_id in chunk_store:
             c = chunk_store[chunk_id]
-            meta = c["metadata"]
-            cited_chunk_texts.append(
-                f"[{meta.get('file_name', '?')}, {meta.get('page_ref', '?')}]: "
-                f"{c['text']}"
-            )
+            cited_entries.append(c)
+    cited_entries.sort(key=lambda c: len(c["text"]))
+    cited_entries = cited_entries[:max_chunks]
 
+    cited_chunk_texts = []
+    for c in cited_entries:
+        meta = c["metadata"]
+        cited_chunk_texts.append(
+            f"[{meta.get('file_name', '?')}, {meta.get('page_ref', '?')}]: "
+            f"{c['text']}"
+        )
+
+    # Trim history to last N turns (most recent exchanges matter most)
+    trimmed_history = session.history[-max_history_turns:]
     history_text = "\n\n".join(
-        f"{turn['agent'].upper()}: {turn['content']}" for turn in session.history
+        f"{turn['agent'].upper()}: {turn['content']}" for turn in trimmed_history
     )
 
     user_message = (
@@ -316,6 +333,49 @@ async def generate_report(session: Session, chunk_store: dict) -> list[dict]:
         + "\n\n".join(cited_chunk_texts)
         + f"\n\nFULL DEBATE TRANSCRIPT:\n{history_text}"
     )
+
+    # Rough token gate — char_count / 4 is close enough for a guardrail.
+    # This is a hack, not a proper tokenizer.
+    full_message_string = SUMMARIZER_PROMPT + user_message
+    estimated_tokens = len(full_message_string) // 4
+    if estimated_tokens > 5500:
+        # first fallback: tighten to 4 turns, 6 chunks
+        trimmed_history = session.history[-4:]
+        cited_entries_fb = cited_entries[:6]
+        history_text = "\n\n".join(
+            f"{turn['agent'].upper()}: {turn['content']}" for turn in trimmed_history
+        )
+        cited_chunk_texts = [
+            f"[{c['metadata'].get('file_name', '?')}, {c['metadata'].get('page_ref', '?')}]: {c['text']}"
+            for c in cited_entries_fb
+        ]
+        user_message = (
+            f"WITNESS STATEMENT:\n{session.witness_statement}\n\n"
+            f"DOCUMENTARY EVIDENCE CITED DURING DEBATE:\n"
+            + "\n\n".join(cited_chunk_texts)
+            + f"\n\nFULL DEBATE TRANSCRIPT:\n{history_text}"
+        )
+        full_message_string = SUMMARIZER_PROMPT + user_message
+        estimated_tokens = len(full_message_string) // 4
+
+    if estimated_tokens > 5500:
+        # last-ditch fallback: 2 turns, 4 chunks
+        # if this fails we're out of options without a bigger model
+        trimmed_history = session.history[-2:]
+        cited_entries_fb = cited_entries[:4]
+        history_text = "\n\n".join(
+            f"{turn['agent'].upper()}: {turn['content']}" for turn in trimmed_history
+        )
+        cited_chunk_texts = [
+            f"[{c['metadata'].get('file_name', '?')}, {c['metadata'].get('page_ref', '?')}]: {c['text']}"
+            for c in cited_entries_fb
+        ]
+        user_message = (
+            f"WITNESS STATEMENT:\n{session.witness_statement}\n\n"
+            f"DOCUMENTARY EVIDENCE CITED DURING DEBATE:\n"
+            + "\n\n".join(cited_chunk_texts)
+            + f"\n\nFULL DEBATE TRANSCRIPT:\n{history_text}"
+        )
 
     response = await asyncio.wait_for(
         _client.chat.completions.create(
@@ -493,7 +553,23 @@ async def run_debate(session: Session, chunk_store: dict):
         print("report generation timed out for session", session.id)
         session.status = "failed"
     except Exception as e:
-        print("report generation failed:", str(e), "session:", session.id)
-        session.status = "failed"
+        if '413' in str(e):
+            print("summarizer 413 — retrying with reduced context")
+            # cut history to 2 turns, chunks to 4, try once more
+            try:
+                report = await generate_report(
+                    session, chunk_store,
+                    max_history_turns=2, max_chunks=4,
+                )
+                session.report = report
+                session.status = "complete"
+                print("report generation complete (413 retry) for session", session.id)
+            except Exception:
+                # if this also fails, set session.status = "failed" and move on
+                print("report generation failed on 413 retry, session:", session.id)
+                session.status = "failed"
+        else:
+            print("report generation failed:", str(e), "session:", session.id)
+            session.status = "failed"
 
     yield {"type": "session_complete", "reason": reason}
