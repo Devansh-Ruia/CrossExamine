@@ -379,7 +379,9 @@ async def generate_report(
 
     response = await asyncio.wait_for(
         _client.chat.completions.create(
-            model=MODEL,
+            model="llama-3.3-70b-versatile",  # separate model for summarizer — higher TPM limit
+                                    # debate agents use the fast model, summarizer
+                                    # needs more headroom than 6k TPM
             max_tokens=4096,
             messages=[
                 {"role": "system", "content": SUMMARIZER_PROMPT},
